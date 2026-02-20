@@ -29,4 +29,5 @@ Replace these files to re-skin the game:
 - `assets/coin.svg`
 - `assets/flag.svg`
 
-If you want to use PNG/JPG/WebP instead of SVG, update the `assetPaths` values in `game.js`.
+You can also use `PNG`, `JPG`, or `WebP` with the same base names.
+Example: upload `assets/player.png` and it will be used automatically.

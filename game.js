@@ -17,11 +17,35 @@ const airFriction = 0.92;
 const jumpVelocity = -10.4;
 const maxFallSpeed = 13.5;
 const highScoreStorageKey = "tiny-platformer-best";
-const assetPaths = {
-  player: "./assets/player.svg",
-  platform: "./assets/platform.svg",
-  coin: "./assets/coin.svg",
-  flag: "./assets/flag.svg",
+const assetSources = {
+  player: [
+    "./assets/player.png",
+    "./assets/player.webp",
+    "./assets/player.jpg",
+    "./assets/player.jpeg",
+    "./assets/player.svg",
+  ],
+  platform: [
+    "./assets/platform.png",
+    "./assets/platform.webp",
+    "./assets/platform.jpg",
+    "./assets/platform.jpeg",
+    "./assets/platform.svg",
+  ],
+  coin: [
+    "./assets/coin.png",
+    "./assets/coin.webp",
+    "./assets/coin.jpg",
+    "./assets/coin.jpeg",
+    "./assets/coin.svg",
+  ],
+  flag: [
+    "./assets/flag.png",
+    "./assets/flag.webp",
+    "./assets/flag.jpg",
+    "./assets/flag.jpeg",
+    "./assets/flag.svg",
+  ],
 };
 
 const assets = {
@@ -121,16 +145,27 @@ function loadImageAsset(path) {
   });
 }
 
-function preloadAssets() {
-  const entries = Object.entries(assetPaths);
-  Promise.all(entries.map(async ([key, path]) => [key, await loadImageAsset(path)])).then(
-    (loadedAssets) => {
-      for (const [key, image] of loadedAssets) {
-        assets[key] = image;
-      }
-      render();
+async function loadFirstAvailable(paths) {
+  for (const path of paths) {
+    const image = await loadImageAsset(path);
+    if (image) {
+      return image;
     }
-  );
+  }
+
+  return null;
+}
+
+function preloadAssets() {
+  const entries = Object.entries(assetSources);
+  Promise.all(
+    entries.map(async ([key, sourcePaths]) => [key, await loadFirstAvailable(sourcePaths)])
+  ).then((loadedAssets) => {
+    for (const [key, image] of loadedAssets) {
+      assets[key] = image;
+    }
+    render();
+  });
 }
 
 function clamp(value, min, max) {

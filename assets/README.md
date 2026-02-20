@@ -7,15 +7,23 @@ Replace these files to change the game's art:
 - `coin.svg` - coin sprite
 - `flag.svg` - finish flag
 
-You can keep the same filenames and use PNG, JPG, or WebP if you also update the paths in `game.js`.
+You can also use `.png`, `.jpg`, `.jpeg`, or `.webp` with the same base names.
+Examples:
 
-Current default paths in `game.js`:
+- `player.png`
+- `platform.webp`
+- `coin.jpg`
+- `flag.jpeg`
+
+The loader tries modern image files first, then falls back to SVG defaults.
+
+Current configuration in `game.js`:
 
 ```js
-const assetPaths = {
-  player: "./assets/player.svg",
-  platform: "./assets/platform.svg",
-  coin: "./assets/coin.svg",
-  flag: "./assets/flag.svg",
+const assetSources = {
+  player: ["./assets/player.png", "...", "./assets/player.svg"],
+  platform: ["./assets/platform.png", "...", "./assets/platform.svg"],
+  coin: ["./assets/coin.png", "...", "./assets/coin.svg"],
+  flag: ["./assets/flag.png", "...", "./assets/flag.svg"],
 };
 ```
