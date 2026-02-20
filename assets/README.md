@@ -2,6 +2,7 @@
 
 Replace these files to change the game's art:
 
+- `background.png` - background image (also supports gif/jpg/webp/svg)
 - `player.svg` - player car sprite
 - `platform.svg` - platform texture
 - `coin.svg` - coin sprite
@@ -21,6 +22,7 @@ Current configuration in `game.js`:
 
 ```js
 const assetSources = {
+  background: ["./assets/background.png", "...", "./assets/Isopoly_01.gif"],
   player: ["./assets/player.png", "...", "./assets/player.svg"],
   platform: ["./assets/platform.png", "...", "./assets/platform.svg"],
   coin: ["./assets/coin.png", "...", "./assets/coin.svg"],

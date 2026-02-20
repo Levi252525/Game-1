@@ -18,6 +18,15 @@ const jumpVelocity = -10.4;
 const maxFallSpeed = 13.5;
 const highScoreStorageKey = "tiny-platformer-best";
 const assetSources = {
+  background: [
+    "./assets/background.png",
+    "./assets/background.webp",
+    "./assets/background.jpg",
+    "./assets/background.jpeg",
+    "./assets/background.gif",
+    "./assets/background.svg",
+    "./assets/Isopoly_01.gif",
+  ],
   player: [
     "./assets/player.png",
     "./assets/player.webp",
@@ -49,6 +58,7 @@ const assetSources = {
 };
 
 const assets = {
+  background: null,
   player: null,
   platform: null,
   coin: null,
@@ -431,7 +441,22 @@ function update(delta) {
   updateCamera();
 }
 
+function drawBackgroundImage(image) {
+  const scale = Math.max(canvas.width / image.width, canvas.height / image.height);
+  const drawWidth = image.width * scale;
+  const drawHeight = image.height * scale;
+  const drawX = (canvas.width - drawWidth) / 2;
+  const drawY = (canvas.height - drawHeight) / 2;
+
+  ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+}
+
 function drawBackground() {
+  if (assets.background) {
+    drawBackgroundImage(assets.background);
+    return;
+  }
+
   const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
   skyGradient.addColorStop(0, "#1f2f4d");
   skyGradient.addColorStop(1, "#0e172a");

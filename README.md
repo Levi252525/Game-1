@@ -24,6 +24,7 @@ This project now loads art files from the `assets/` folder.
 
 Replace these files to re-skin the game:
 
+- `assets/background.png` (or `background.gif` / `background.webp` / `background.jpg`)
 - `assets/player.svg`
 - `assets/platform.svg`
 - `assets/coin.svg`
@@ -31,3 +32,5 @@ Replace these files to re-skin the game:
 
 You can also use `PNG`, `JPG`, or `WebP` with the same base names.
 Example: upload `assets/player.png` and it will be used automatically.
+
+The game currently auto-detects your uploaded `assets/Isopoly_01.gif` and uses it as the background.
