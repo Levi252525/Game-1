@@ -6,9 +6,6 @@ const highScoreElement = document.getElementById("highScore");
 const statusElement = document.getElementById("statusText");
 const startPauseButton = document.getElementById("startPauseButton");
 const restartButton = document.getElementById("restartButton");
-const uploadSpriteButton = document.getElementById("uploadSpriteButton");
-const clearSpriteButton = document.getElementById("clearSpriteButton");
-const spriteFileInput = document.getElementById("spriteFileInput");
 
 const worldWidth = 2200;
 const worldHeight = canvas.height;
@@ -20,6 +17,19 @@ const airFriction = 0.92;
 const jumpVelocity = -10.4;
 const maxFallSpeed = 13.5;
 const highScoreStorageKey = "tiny-platformer-best";
+const assetPaths = {
+  player: "./assets/player.svg",
+  platform: "./assets/platform.svg",
+  coin: "./assets/coin.svg",
+  flag: "./assets/flag.svg",
+};
+
+const assets = {
+  player: null,
+  platform: null,
+  coin: null,
+  flag: null,
+};
 
 const leftInputs = new Set(["arrowleft", "a"]);
 const rightInputs = new Set(["arrowright", "d"]);
@@ -67,8 +77,6 @@ let isGameOver = false;
 let hasWon = false;
 let animationFrameId = null;
 let lastTimestamp = 0;
-let customSpriteImage = null;
-let customSpriteUrl = null;
 
 function createPlayer() {
   return {
@@ -102,6 +110,27 @@ function cloneCoins() {
     radius: 8,
     collected: false,
   }));
+}
+
+function loadImageAsset(path) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = path;
+  });
+}
+
+function preloadAssets() {
+  const entries = Object.entries(assetPaths);
+  Promise.all(entries.map(async ([key, path]) => [key, await loadImageAsset(path)])).then(
+    (loadedAssets) => {
+      for (const [key, image] of loadedAssets) {
+        assets[key] = image;
+      }
+      render();
+    }
+  );
 }
 
 function clamp(value, min, max) {
@@ -439,7 +468,7 @@ function drawPlayerCar() {
   ctx.restore();
 }
 
-function drawPlayerImage(image) {
+function drawPlayerSprite(image) {
   const centerX = player.x + player.width / 2;
   const centerY = player.y + player.height / 2;
 
@@ -452,8 +481,8 @@ function drawPlayerImage(image) {
 }
 
 function drawPlayer() {
-  if (customSpriteImage) {
-    drawPlayerImage(customSpriteImage);
+  if (assets.player) {
+    drawPlayerSprite(assets.player);
     return;
   }
 
@@ -465,6 +494,11 @@ function drawWorld() {
   ctx.translate(-cameraX, 0);
 
   for (const platform of platforms) {
+    if (assets.platform) {
+      ctx.drawImage(assets.platform, platform.x, platform.y, platform.width, platform.height);
+      continue;
+    }
+
     const isGround = platform.y >= 320;
     ctx.fillStyle = isGround ? "#334155" : "#3f4f6f";
     ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
@@ -472,13 +506,23 @@ function drawWorld() {
     ctx.fillRect(platform.x, platform.y, platform.width, 4);
   }
 
-  ctx.fillStyle = "#dbe4ff";
-  ctx.fillRect(goal.x + 8, goal.y, 4, goal.height);
-  ctx.fillStyle = allCoinsCollected() ? "#22c55e" : "#f97316";
-  ctx.fillRect(goal.x + 12, goal.y + 8, 26, 14);
+  if (assets.flag) {
+    ctx.drawImage(assets.flag, goal.x - 2, goal.y, 40, goal.height);
+  } else {
+    ctx.fillStyle = "#dbe4ff";
+    ctx.fillRect(goal.x + 8, goal.y, 4, goal.height);
+    ctx.fillStyle = allCoinsCollected() ? "#22c55e" : "#f97316";
+    ctx.fillRect(goal.x + 12, goal.y + 8, 26, 14);
+  }
 
   for (const coin of coins) {
     if (coin.collected) {
+      continue;
+    }
+
+    if (assets.coin) {
+      const diameter = coin.radius * 2;
+      ctx.drawImage(assets.coin, coin.x - coin.radius, coin.y - coin.radius, diameter, diameter);
       continue;
     }
 
@@ -578,53 +622,6 @@ window.addEventListener("blur", () => {
   }
 });
 
-window.addEventListener("beforeunload", () => {
-  if (customSpriteUrl) {
-    URL.revokeObjectURL(customSpriteUrl);
-  }
-});
-
-function setCustomSpriteFromFile(file) {
-  const looksLikeImage =
-    file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name);
-  if (!looksLikeImage) {
-    setStatus("Choose an image file (PNG, JPG, GIF, or WebP).");
-    return;
-  }
-
-  const nextUrl = URL.createObjectURL(file);
-  const nextImage = new Image();
-
-  nextImage.onload = () => {
-    if (customSpriteUrl) {
-      URL.revokeObjectURL(customSpriteUrl);
-    }
-
-    customSpriteImage = nextImage;
-    customSpriteUrl = nextUrl;
-    setStatus("Custom picture loaded.");
-    render();
-  };
-
-  nextImage.onerror = () => {
-    URL.revokeObjectURL(nextUrl);
-    setStatus("Could not load that image. Try a different file.");
-  };
-
-  nextImage.src = nextUrl;
-}
-
-function clearCustomSprite() {
-  if (customSpriteUrl) {
-    URL.revokeObjectURL(customSpriteUrl);
-    customSpriteUrl = null;
-  }
-
-  customSpriteImage = null;
-  setStatus("Using default car.");
-  render();
-}
-
 startPauseButton.addEventListener("click", () => {
   if (isRunning) {
     pauseGame();
@@ -637,29 +634,6 @@ restartButton.addEventListener("click", () => {
   restartGame();
 });
 
-uploadSpriteButton.addEventListener("click", () => {
-  spriteFileInput.click();
-});
-
-clearSpriteButton.addEventListener("click", () => {
-  clearCustomSprite();
-});
-
-spriteFileInput.addEventListener("change", (event) => {
-  const input = event.target;
-  if (!(input instanceof HTMLInputElement)) {
-    return;
-  }
-
-  const file = input.files?.[0];
-  input.value = "";
-
-  if (!file) {
-    return;
-  }
-
-  setCustomSpriteFromFile(file);
-});
-
 updateScoreboard();
 restartGame();
+preloadAssets();

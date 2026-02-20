@@ -18,9 +18,15 @@ A simple browser platformer built with plain HTML, CSS, and JavaScript.
 - Falling off the map ends the run.
 - Your best coin count is saved in `localStorage`.
 
-## Use your own picture for the car
+## Change game assets
 
-1. Click **Use My Picture**.
-2. Pick an image file from your device (PNG/JPG/GIF/WebP).
-3. The selected image becomes your player sprite immediately.
-4. Click **Default Car** to switch back.
+This project now loads art files from the `assets/` folder.
+
+Replace these files to re-skin the game:
+
+- `assets/player.svg`
+- `assets/platform.svg`
+- `assets/coin.svg`
+- `assets/flag.svg`
+
+If you want to use PNG/JPG/WebP instead of SVG, update the `assetPaths` values in `game.js`.
