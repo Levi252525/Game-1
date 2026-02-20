@@ -25,6 +25,8 @@ const maxHealth = 3;
 const maxJumpCount = 2;
 const checkpointPoleHeight = 56;
 const highScoreStorageKey = "tiny-platformer-best";
+const levelClearSequenceMs = 2200;
+const frameDurationMs = 1000 / 60;
 
 const playerWidth = 32;
 const playerHeight = 18;
@@ -32,6 +34,14 @@ const enemyWidth = 26;
 const enemyHeight = 18;
 
 const assetSources = {
+  levelClear: [
+    "./assets/level-clear.gif",
+    "./assets/level_clear.gif",
+    "./assets/levelclear.gif",
+    "./assets/06c1f71f37973dad8b8e40a82c6083b5b2fcbc51.gif",
+    "./assets/victory.gif",
+    "./assets/Isopoly_01.gif",
+  ],
   background: [
     "./assets/background.png",
     "./assets/background.webp",
@@ -72,6 +82,7 @@ const assetSources = {
 };
 
 const assets = {
+  levelClear: null,
   background: null,
   player: null,
   platform: null,
@@ -104,6 +115,9 @@ let currentLevelIndex = 0;
 let lastUnlockedLevelIndex = 0;
 let cameraX = 0;
 let invulnerabilityTimer = 0;
+let isLevelClearSequence = false;
+let levelClearTimerMs = 0;
+let pendingLevelIndex = null;
 
 let isRunning = false;
 let isGameOver = false;
@@ -200,30 +214,64 @@ function buildLevel(levelNumber) {
   const levelCoins = [];
   const levelEnemies = [];
   const levelCheckpoints = [];
+  const preWallPlatforms = [];
 
   const startTop = 320;
-  levelPlatforms.push({ x: 0, y: startTop, width: 300, height: worldHeight - startTop });
+  const startPlatform = { x: 0, y: startTop, width: 300, height: worldHeight - startTop };
+  levelPlatforms.push(startPlatform);
 
   const rampOneTop = clamp(306 - difficulty * 2, 272, 306);
-  levelPlatforms.push({
+  const rampOnePlatform = {
     x: 330,
     y: rampOneTop,
     width: 150,
     height: worldHeight - rampOneTop,
-  });
+  };
+  levelPlatforms.push(rampOnePlatform);
 
   const rampTwoTop = clamp(282 - difficulty * 3, 228, 282);
-  levelPlatforms.push({
+  const rampTwoPlatform = {
     x: 530,
     y: rampTwoTop,
     width: 130,
     height: worldHeight - rampTwoTop,
-  });
+  };
+  levelPlatforms.push(rampTwoPlatform);
 
   const wallX = 730 + difficulty * 70;
   const wallTop = clamp(196 - difficulty * 4, 146, 196);
-  levelPlatforms.push({ x: wallX, y: wallTop, width: 34, height: worldHeight - wallTop });
-  levelPlatforms.push({ x: wallX + 48, y: wallTop, width: 34, height: worldHeight - wallTop });
+  const preWallStartX = rampTwoPlatform.x + rampTwoPlatform.width + 100;
+  const preWallEndX = wallX - 130;
+  const preWallCount =
+    preWallEndX > preWallStartX ? Math.ceil((preWallEndX - preWallStartX) / 150) : 0;
+  for (let i = 0; i < preWallCount; i += 1) {
+    const ratio = preWallCount === 1 ? 0 : i / (preWallCount - 1);
+    const x = Math.round(preWallStartX + ratio * (preWallEndX - preWallStartX));
+    const top = clamp(
+      rampTwoTop - 18 - i * 8 - Math.floor(difficulty / 3) * 3,
+      wallTop + 16,
+      rampTwoTop
+    );
+    const width = Math.max(94, 118 - i * 5);
+    const preWallPlatform = {
+      x,
+      y: top,
+      width,
+      height: worldHeight - top,
+    };
+    levelPlatforms.push(preWallPlatform);
+    preWallPlatforms.push(preWallPlatform);
+  }
+
+  const leftWallPlatform = { x: wallX, y: wallTop, width: 34, height: worldHeight - wallTop };
+  const rightWallPlatform = {
+    x: wallX + 48,
+    y: wallTop,
+    width: 34,
+    height: worldHeight - wallTop,
+  };
+  levelPlatforms.push(leftWallPlatform);
+  levelPlatforms.push(rightWallPlatform);
 
   const climbCount = 3 + Math.floor(difficulty / 2);
   const climbSpacing = 150 - Math.min(30, difficulty * 2);
@@ -289,10 +337,11 @@ function buildLevel(levelNumber) {
   addCoin(250, startTop - 36);
 
   const routePlatforms = [
-    levelPlatforms[1],
-    levelPlatforms[2],
-    levelPlatforms[3],
-    levelPlatforms[4],
+    rampOnePlatform,
+    rampTwoPlatform,
+    ...preWallPlatforms,
+    leftWallPlatform,
+    rightWallPlatform,
     ...climbPlatforms,
     descentPlatform,
     ...tailPlatforms,
@@ -315,7 +364,7 @@ function buildLevel(levelNumber) {
     addCoin(goalForLevel.x - 80, goalForLevel.y - 24);
   }
 
-  const firstCheckpointPlatform = levelPlatforms[2];
+  const firstCheckpointPlatform = rampTwoPlatform;
   levelCheckpoints.push(
     makeCheckpoint(
       firstCheckpointPlatform.x + firstCheckpointPlatform.width - 28,
@@ -337,8 +386,9 @@ function buildLevel(levelNumber) {
   }
 
   const enemyPlatforms = [
-    levelPlatforms[1],
-    levelPlatforms[2],
+    rampOnePlatform,
+    rampTwoPlatform,
+    ...preWallPlatforms,
     ...climbPlatforms,
     descentPlatform,
     ...tailPlatforms,
@@ -464,11 +514,18 @@ function resetInputState() {
   jumpQueued = false;
 }
 
+function resetLevelClearSequence() {
+  isLevelClearSequence = false;
+  levelClearTimerMs = 0;
+  pendingLevelIndex = null;
+}
+
 function loadLevel(index) {
   const template = levelTemplates[index];
   const level = cloneLevelTemplate(template);
 
   currentLevelIndex = index;
+  resetLevelClearSequence();
   worldWidth = level.worldWidth;
   platforms = level.platforms;
   coins = level.coins;
@@ -484,6 +541,7 @@ function loadLevel(index) {
 
 function beginRun(startLevelIndex = 0) {
   const safeLevelIndex = clamp(startLevelIndex, 0, totalLevels - 1);
+  resetLevelClearSequence();
   score = 0;
   lives = maxLives;
   health = maxHealth;
@@ -541,6 +599,7 @@ function restartGame() {
 }
 
 function endGame(message) {
+  resetLevelClearSequence();
   isRunning = false;
   isGameOver = true;
   stopGameLoop();
@@ -549,6 +608,7 @@ function endGame(message) {
 }
 
 function finishAllLevels() {
+  resetLevelClearSequence();
   isRunning = false;
   hasWon = true;
   stopGameLoop();
@@ -614,20 +674,47 @@ function damagePlayerFromEnemy(enemy) {
   setStatus(`Hit by enemy! Health ${health}/${maxHealth}.`);
 }
 
-function advanceLevel() {
-  if (currentLevelIndex >= totalLevels - 1) {
+function startLevelClearSequence(nextLevelIndex, completeRun) {
+  isLevelClearSequence = true;
+  levelClearTimerMs = levelClearSequenceMs;
+  pendingLevelIndex = nextLevelIndex;
+  player.vx = 0;
+  player.vy = 0;
+  resetInputState();
+  setStatus(`Level ${currentLevelIndex + 1} clear!`);
+
+  if (completeRun) {
+    pendingLevelIndex = -1;
+  }
+}
+
+function completeLevelClearSequence() {
+  const target = pendingLevelIndex;
+  resetLevelClearSequence();
+
+  if (target === -1) {
     finishAllLevels();
     return;
   }
 
-  currentLevelIndex += 1;
-  lastUnlockedLevelIndex = Math.max(lastUnlockedLevelIndex, currentLevelIndex);
+  if (target === null || target >= totalLevels) {
+    return;
+  }
+
   health = maxHealth;
-  loadLevel(currentLevelIndex);
+  lastUnlockedLevelIndex = Math.max(lastUnlockedLevelIndex, target);
+  loadLevel(target);
   updateScoreboard();
-  setStatus(
-    `Level ${currentLevelIndex + 1}/${totalLevels} (${levelTemplates[currentLevelIndex].difficultyLabel})`
-  );
+  setStatus(`Level ${currentLevelIndex + 1}/${totalLevels} (${levelTemplates[target].difficultyLabel})`);
+}
+
+function advanceLevel() {
+  if (currentLevelIndex >= totalLevels - 1) {
+    startLevelClearSequence(null, true);
+    return;
+  }
+
+  startLevelClearSequence(currentLevelIndex + 1, false);
 }
 
 function handleHorizontalMovement(delta) {
@@ -829,6 +916,14 @@ function updateCamera() {
 }
 
 function update(delta) {
+  if (isLevelClearSequence) {
+    levelClearTimerMs -= delta * frameDurationMs;
+    if (levelClearTimerMs <= 0) {
+      completeLevelClearSequence();
+    }
+    return;
+  }
+
   if (invulnerabilityTimer > 0) {
     invulnerabilityTimer = Math.max(0, invulnerabilityTimer - delta);
   }
@@ -1068,11 +1163,37 @@ function drawHud() {
   ctx.fillText(`Double jump: ${doubleJumpReady ? "Ready" : "Used"}`, 12, 40);
 }
 
+function drawLevelClearOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(2, 6, 23, 0.6)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (assets.levelClear) {
+    const maxWidth = canvas.width * 0.9;
+    const maxHeight = canvas.height * 0.72;
+    const scale = Math.min(maxWidth / assets.levelClear.width, maxHeight / assets.levelClear.height);
+    const width = assets.levelClear.width * scale;
+    const height = assets.levelClear.height * scale;
+    const x = (canvas.width - width) / 2;
+    const y = (canvas.height - height) / 2 - 10;
+    ctx.drawImage(assets.levelClear, x, y, width, height);
+  }
+
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 24px system-ui, sans-serif";
+  ctx.fillText("LEVEL CLEAR!", canvas.width / 2, canvas.height - 28);
+  ctx.restore();
+}
+
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackground();
   drawWorld();
   drawHud();
+  if (isLevelClearSequence) {
+    drawLevelClearOverlay();
+  }
 }
 
 function gameLoop(timestamp) {

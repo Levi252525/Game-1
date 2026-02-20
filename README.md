@@ -19,6 +19,7 @@ A browser platformer built with plain HTML, CSS, and JavaScript.
 - **Lives + health** system.
 - **Game-over retry from current level** instead of level 1.
 - **Double jump** for tighter platform sections.
+- **Level-clear GIF playback** between levels.
 - **Persistent best score** saved in `localStorage`.
 
 ## Goal
