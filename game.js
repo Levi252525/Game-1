@@ -6,6 +6,9 @@ const highScoreElement = document.getElementById("highScore");
 const statusElement = document.getElementById("statusText");
 const startPauseButton = document.getElementById("startPauseButton");
 const restartButton = document.getElementById("restartButton");
+const uploadSpriteButton = document.getElementById("uploadSpriteButton");
+const clearSpriteButton = document.getElementById("clearSpriteButton");
+const spriteFileInput = document.getElementById("spriteFileInput");
 
 const worldWidth = 2200;
 const worldHeight = canvas.height;
@@ -64,6 +67,8 @@ let isGameOver = false;
 let hasWon = false;
 let animationFrameId = null;
 let lastTimestamp = 0;
+let customSpriteImage = null;
+let customSpriteUrl = null;
 
 function createPlayer() {
   return {
@@ -434,6 +439,27 @@ function drawPlayerCar() {
   ctx.restore();
 }
 
+function drawPlayerImage(image) {
+  const centerX = player.x + player.width / 2;
+  const centerY = player.y + player.height / 2;
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(player.facing, 1);
+  ctx.translate(-player.width / 2, -player.height / 2);
+  ctx.drawImage(image, 0, 0, player.width, player.height);
+  ctx.restore();
+}
+
+function drawPlayer() {
+  if (customSpriteImage) {
+    drawPlayerImage(customSpriteImage);
+    return;
+  }
+
+  drawPlayerCar();
+}
+
 function drawWorld() {
   ctx.save();
   ctx.translate(-cameraX, 0);
@@ -465,7 +491,7 @@ function drawWorld() {
     ctx.stroke();
   }
 
-  drawPlayerCar();
+  drawPlayer();
 
   ctx.restore();
 }
@@ -552,6 +578,53 @@ window.addEventListener("blur", () => {
   }
 });
 
+window.addEventListener("beforeunload", () => {
+  if (customSpriteUrl) {
+    URL.revokeObjectURL(customSpriteUrl);
+  }
+});
+
+function setCustomSpriteFromFile(file) {
+  const looksLikeImage =
+    file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name);
+  if (!looksLikeImage) {
+    setStatus("Choose an image file (PNG, JPG, GIF, or WebP).");
+    return;
+  }
+
+  const nextUrl = URL.createObjectURL(file);
+  const nextImage = new Image();
+
+  nextImage.onload = () => {
+    if (customSpriteUrl) {
+      URL.revokeObjectURL(customSpriteUrl);
+    }
+
+    customSpriteImage = nextImage;
+    customSpriteUrl = nextUrl;
+    setStatus("Custom picture loaded.");
+    render();
+  };
+
+  nextImage.onerror = () => {
+    URL.revokeObjectURL(nextUrl);
+    setStatus("Could not load that image. Try a different file.");
+  };
+
+  nextImage.src = nextUrl;
+}
+
+function clearCustomSprite() {
+  if (customSpriteUrl) {
+    URL.revokeObjectURL(customSpriteUrl);
+    customSpriteUrl = null;
+  }
+
+  customSpriteImage = null;
+  setStatus("Using default car.");
+  render();
+}
+
 startPauseButton.addEventListener("click", () => {
   if (isRunning) {
     pauseGame();
@@ -562,6 +635,30 @@ startPauseButton.addEventListener("click", () => {
 
 restartButton.addEventListener("click", () => {
   restartGame();
+});
+
+uploadSpriteButton.addEventListener("click", () => {
+  spriteFileInput.click();
+});
+
+clearSpriteButton.addEventListener("click", () => {
+  clearCustomSprite();
+});
+
+spriteFileInput.addEventListener("change", (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+
+  const file = input.files?.[0];
+  input.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  setCustomSpriteFromFile(file);
 });
 
 updateScoreboard();
