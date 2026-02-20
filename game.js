@@ -69,11 +69,12 @@ function createPlayer() {
   return {
     x: 48,
     y: 276,
-    width: 24,
-    height: 30,
+    width: 32,
+    height: 18,
     vx: 0,
     vy: 0,
     onGround: false,
+    facing: 1,
   };
 }
 
@@ -212,8 +213,10 @@ function winGame() {
 function handleHorizontalMovement(delta) {
   if (keys.left && !keys.right) {
     player.vx -= moveAcceleration * delta;
+    player.facing = -1;
   } else if (keys.right && !keys.left) {
     player.vx += moveAcceleration * delta;
+    player.facing = 1;
   } else {
     const friction = player.onGround ? groundFriction : airFriction;
     player.vx *= Math.pow(friction, delta);
@@ -391,6 +394,46 @@ function drawBackground() {
   }
 }
 
+function drawPlayerCar() {
+  const centerX = player.x + player.width / 2;
+  const centerY = player.y + player.height / 2;
+  const wheelRadius = 4;
+  const wheelY = player.height - 1;
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(player.facing, 1);
+  ctx.translate(-player.width / 2, -player.height / 2);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath();
+  ctx.arc(8, wheelY, wheelRadius, 0, Math.PI * 2);
+  ctx.arc(player.width - 8, wheelY, wheelRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#ef4444";
+  ctx.fillRect(2, 7, player.width - 4, 7);
+
+  ctx.fillStyle = "#dc2626";
+  ctx.beginPath();
+  ctx.moveTo(9, 7);
+  ctx.lineTo(13, 2);
+  ctx.lineTo(player.width - 9, 2);
+  ctx.lineTo(player.width - 4, 7);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#bae6fd";
+  ctx.fillRect(14, 4, player.width - 19, 4);
+
+  ctx.fillStyle = "#fde68a";
+  ctx.fillRect(player.width - 2, 9, 2, 3);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 9, 2, 3);
+
+  ctx.restore();
+}
+
 function drawWorld() {
   ctx.save();
   ctx.translate(-cameraX, 0);
@@ -422,12 +465,7 @@ function drawWorld() {
     ctx.stroke();
   }
 
-  ctx.fillStyle = "#22d3ee";
-  ctx.fillRect(player.x, player.y, player.width, player.height);
-  ctx.fillStyle = "#a5f3fc";
-  ctx.fillRect(player.x + 4, player.y + 4, player.width - 8, player.height - 8);
-  ctx.fillStyle = "#0f172a";
-  ctx.fillRect(player.x + 15, player.y + 10, 3, 3);
+  drawPlayerCar();
 
   ctx.restore();
 }
