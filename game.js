@@ -7,43 +7,125 @@ const statusElement = document.getElementById("statusText");
 const startPauseButton = document.getElementById("startPauseButton");
 const restartButton = document.getElementById("restartButton");
 
-const tileSize = 20;
-const boardSize = canvas.width / tileSize;
-const initialTickMs = 130;
-const fastestTickMs = 70;
-const tickStepMs = 6;
-const highScoreStorageKey = "snake-sprint-high-score";
+const worldWidth = 2200;
+const worldHeight = canvas.height;
+const gravity = 0.5;
+const moveAcceleration = 0.62;
+const maxRunSpeed = 4.3;
+const groundFriction = 0.78;
+const airFriction = 0.92;
+const jumpVelocity = -10.4;
+const maxFallSpeed = 13.5;
+const highScoreStorageKey = "tiny-platformer-best";
 
-let snake = [];
-let direction = { x: 1, y: 0 };
-let queuedDirection = { x: 1, y: 0 };
-let food = { x: 0, y: 0 };
+const leftInputs = new Set(["arrowleft", "a"]);
+const rightInputs = new Set(["arrowright", "d"]);
+const jumpInputs = new Set(["arrowup", "w", " "]);
+
+const basePlatforms = [
+  { x: 0, y: 320, width: 280, height: 40 },
+  { x: 340, y: 296, width: 170, height: 64 },
+  { x: 560, y: 266, width: 160, height: 94 },
+  { x: 790, y: 312, width: 170, height: 48 },
+  { x: 1020, y: 284, width: 180, height: 76 },
+  { x: 1260, y: 250, width: 170, height: 110 },
+  { x: 1470, y: 302, width: 170, height: 58 },
+  { x: 1700, y: 270, width: 170, height: 90 },
+  { x: 1940, y: 320, width: 260, height: 40 },
+];
+
+const baseCoins = [
+  { x: 120, y: 284 },
+  { x: 240, y: 284 },
+  { x: 390, y: 260 },
+  { x: 470, y: 260 },
+  { x: 610, y: 230 },
+  { x: 680, y: 230 },
+  { x: 845, y: 276 },
+  { x: 1110, y: 248 },
+  { x: 1320, y: 214 },
+  { x: 1530, y: 266 },
+  { x: 1770, y: 234 },
+  { x: 2030, y: 284 },
+];
+
+const goal = { x: 2140, y: 248, width: 22, height: 72 };
+
+let platforms = [];
+let coins = [];
+let player = createPlayer();
+let keys = { left: false, right: false };
+let jumpQueued = false;
 let score = 0;
-let highScore = Number(localStorage.getItem(highScoreStorageKey)) || 0;
-let tickMs = initialTickMs;
-let gameIntervalId = null;
+let highScore = readHighScore();
+let cameraX = 0;
 let isRunning = false;
 let isGameOver = false;
+let hasWon = false;
+let animationFrameId = null;
+let lastTimestamp = 0;
 
-function isOpposite(a, b) {
-  return a.x === -b.x && a.y === -b.y;
-}
-
-function randomCell() {
+function createPlayer() {
   return {
-    x: Math.floor(Math.random() * boardSize),
-    y: Math.floor(Math.random() * boardSize),
+    x: 48,
+    y: 276,
+    width: 24,
+    height: 30,
+    vx: 0,
+    vy: 0,
+    onGround: false,
   };
 }
 
-function spawnFood() {
-  let nextFood = randomCell();
+function readHighScore() {
+  const storedValue = Number(localStorage.getItem(highScoreStorageKey));
+  return Number.isFinite(storedValue) ? storedValue : 0;
+}
 
-  while (snake.some((segment) => segment.x === nextFood.x && segment.y === nextFood.y)) {
-    nextFood = randomCell();
-  }
+function saveHighScore() {
+  localStorage.setItem(highScoreStorageKey, String(highScore));
+}
 
-  food = nextFood;
+function clonePlatforms() {
+  return basePlatforms.map((platform) => ({ ...platform }));
+}
+
+function cloneCoins() {
+  return baseCoins.map((coin) => ({
+    ...coin,
+    radius: 8,
+    collected: false,
+  }));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function rectanglesOverlap(a, b) {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+function getPlayerRect() {
+  return {
+    x: player.x,
+    y: player.y,
+    width: player.width,
+    height: player.height,
+  };
+}
+
+function remainingCoins() {
+  return coins.length - score;
+}
+
+function allCoinsCollected() {
+  return remainingCoins() === 0;
 }
 
 function updateScoreboard() {
@@ -55,100 +137,25 @@ function setStatus(message) {
   statusElement.textContent = message;
 }
 
-function drawGrid() {
-  ctx.strokeStyle = "#0f1730";
-  ctx.lineWidth = 1;
-
-  for (let i = 0; i <= boardSize; i += 1) {
-    const offset = i * tileSize;
-    ctx.beginPath();
-    ctx.moveTo(offset, 0);
-    ctx.lineTo(offset, canvas.height);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(0, offset);
-    ctx.lineTo(canvas.width, offset);
-    ctx.stroke();
-  }
-}
-
-function drawFood() {
-  ctx.fillStyle = "#ff6b6b";
-  ctx.beginPath();
-  ctx.arc(
-    food.x * tileSize + tileSize / 2,
-    food.y * tileSize + tileSize / 2,
-    tileSize * 0.33,
-    0,
-    Math.PI * 2
-  );
-  ctx.fill();
-}
-
-function drawSnake() {
-  snake.forEach((segment, index) => {
-    ctx.fillStyle = index === 0 ? "#7fffd4" : "#67e8f9";
-    ctx.fillRect(
-      segment.x * tileSize + 1,
-      segment.y * tileSize + 1,
-      tileSize - 2,
-      tileSize - 2
-    );
-  });
-}
-
-function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#060910";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  drawGrid();
-  drawFood();
-  drawSnake();
-}
-
 function stopGameLoop() {
-  if (gameIntervalId !== null) {
-    clearInterval(gameIntervalId);
-    gameIntervalId = null;
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
-}
-
-function startGameLoop() {
-  stopGameLoop();
-  gameIntervalId = setInterval(tick, tickMs);
-}
-
-function updateSpeedIfNeeded() {
-  if (score > 0 && score % 5 === 0 && tickMs > fastestTickMs) {
-    tickMs = Math.max(fastestTickMs, tickMs - tickStepMs);
-    if (isRunning) {
-      startGameLoop();
-    }
-  }
-}
-
-function endGame() {
-  isRunning = false;
-  isGameOver = true;
-  stopGameLoop();
-  startPauseButton.textContent = "Start";
-  setStatus("Game over. Press Restart or hit R.");
 }
 
 function resetGameState() {
-  snake = [
-    { x: 8, y: 10 },
-    { x: 7, y: 10 },
-    { x: 6, y: 10 },
-  ];
-  direction = { x: 1, y: 0 };
-  queuedDirection = { x: 1, y: 0 };
+  platforms = clonePlatforms();
+  coins = cloneCoins();
+  player = createPlayer();
+  keys = { left: false, right: false };
+  jumpQueued = false;
   score = 0;
-  tickMs = initialTickMs;
+  cameraX = 0;
   isGameOver = false;
-  spawnFood();
+  hasWon = false;
   updateScoreboard();
+  setStatus("Collect all coins and reach the flag.");
   render();
 }
 
@@ -157,14 +164,15 @@ function startGame() {
     return;
   }
 
-  if (isGameOver) {
+  if (isGameOver || hasWon) {
     resetGameState();
   }
 
   isRunning = true;
   startPauseButton.textContent = "Pause";
   setStatus("Running...");
-  startGameLoop();
+  lastTimestamp = performance.now();
+  animationFrameId = requestAnimationFrame(gameLoop);
 }
 
 function pauseGame() {
@@ -175,84 +183,293 @@ function pauseGame() {
   isRunning = false;
   stopGameLoop();
   startPauseButton.textContent = "Start";
-  setStatus("Paused. Press Start or Space.");
+  setStatus("Paused. Press Start or Enter.");
 }
 
 function restartGame() {
   stopGameLoop();
-  resetGameState();
   isRunning = false;
   startPauseButton.textContent = "Start";
-  setStatus("Game reset. Press Start or Space.");
+  resetGameState();
 }
 
-function tick() {
-  direction = queuedDirection;
-  const head = snake[0];
-  const nextHead = {
-    x: head.x + direction.x,
-    y: head.y + direction.y,
-  };
+function endGame(message) {
+  isRunning = false;
+  isGameOver = true;
+  stopGameLoop();
+  startPauseButton.textContent = "Start";
+  setStatus(message);
+}
 
-  const outOfBounds =
-    nextHead.x < 0 ||
-    nextHead.x >= boardSize ||
-    nextHead.y < 0 ||
-    nextHead.y >= boardSize;
-  const hitBody = snake.some(
-    (segment) => segment.x === nextHead.x && segment.y === nextHead.y
-  );
+function winGame() {
+  isRunning = false;
+  hasWon = true;
+  stopGameLoop();
+  startPauseButton.textContent = "Start";
+  setStatus("You win! Press Restart or R to play again.");
+}
 
-  if (outOfBounds || hitBody) {
-    endGame();
-    return;
+function handleHorizontalMovement(delta) {
+  if (keys.left && !keys.right) {
+    player.vx -= moveAcceleration * delta;
+  } else if (keys.right && !keys.left) {
+    player.vx += moveAcceleration * delta;
+  } else {
+    const friction = player.onGround ? groundFriction : airFriction;
+    player.vx *= Math.pow(friction, delta);
+    if (Math.abs(player.vx) < 0.03) {
+      player.vx = 0;
+    }
   }
 
-  snake.unshift(nextHead);
-  const ateFood = nextHead.x === food.x && nextHead.y === food.y;
+  player.vx = clamp(player.vx, -maxRunSpeed, maxRunSpeed);
+}
 
-  if (ateFood) {
+function applyJump() {
+  if (jumpQueued && player.onGround) {
+    player.vy = jumpVelocity;
+    player.onGround = false;
+  }
+  jumpQueued = false;
+}
+
+function resolveHorizontalCollisions() {
+  const playerRect = getPlayerRect();
+  for (const platform of platforms) {
+    if (!rectanglesOverlap(playerRect, platform)) {
+      continue;
+    }
+
+    if (player.vx > 0) {
+      player.x = platform.x - player.width;
+    } else if (player.vx < 0) {
+      player.x = platform.x + platform.width;
+    }
+
+    player.vx = 0;
+    playerRect.x = player.x;
+  }
+}
+
+function resolveVerticalCollisions(previousY) {
+  const playerRect = getPlayerRect();
+  player.onGround = false;
+
+  for (const platform of platforms) {
+    if (!rectanglesOverlap(playerRect, platform)) {
+      continue;
+    }
+
+    const previousBottom = previousY + player.height;
+    const previousTop = previousY;
+
+    if (previousBottom <= platform.y && player.vy >= 0) {
+      player.y = platform.y - player.height;
+      player.vy = 0;
+      player.onGround = true;
+    } else if (previousTop >= platform.y + platform.height && player.vy < 0) {
+      player.y = platform.y + platform.height;
+      player.vy = 0;
+    } else {
+      const overlapFromTop = player.y + player.height - platform.y;
+      const overlapFromBottom = platform.y + platform.height - player.y;
+
+      if (overlapFromTop < overlapFromBottom) {
+        player.y = platform.y - player.height;
+        player.onGround = true;
+      } else {
+        player.y = platform.y + platform.height;
+      }
+      player.vy = 0;
+    }
+
+    playerRect.y = player.y;
+  }
+}
+
+function collectCoins() {
+  const playerRect = getPlayerRect();
+
+  for (const coin of coins) {
+    if (coin.collected) {
+      continue;
+    }
+
+    const coinRect = {
+      x: coin.x - coin.radius,
+      y: coin.y - coin.radius,
+      width: coin.radius * 2,
+      height: coin.radius * 2,
+    };
+
+    if (!rectanglesOverlap(playerRect, coinRect)) {
+      continue;
+    }
+
+    coin.collected = true;
     score += 1;
     if (score > highScore) {
       highScore = score;
-      localStorage.setItem(highScoreStorageKey, String(highScore));
+      saveHighScore();
     }
-    spawnFood();
-    updateSpeedIfNeeded();
     updateScoreboard();
-  } else {
-    snake.pop();
   }
-
-  render();
 }
 
-function queueDirectionFromKey(key) {
-  const normalized = key.toLowerCase();
-  const keyMap = {
-    arrowup: { x: 0, y: -1 },
-    w: { x: 0, y: -1 },
-    arrowdown: { x: 0, y: 1 },
-    s: { x: 0, y: 1 },
-    arrowleft: { x: -1, y: 0 },
-    a: { x: -1, y: 0 },
-    arrowright: { x: 1, y: 0 },
-    d: { x: 1, y: 0 },
-  };
-
-  if (!(normalized in keyMap)) {
+function checkGoal() {
+  if (!rectanglesOverlap(getPlayerRect(), goal)) {
     return;
   }
 
-  const nextDirection = keyMap[normalized];
-  if (!isOpposite(nextDirection, direction)) {
-    queuedDirection = nextDirection;
+  if (allCoinsCollected()) {
+    winGame();
+    return;
+  }
+
+  const remaining = remainingCoins();
+  setStatus(`Collect ${remaining} more coin${remaining === 1 ? "" : "s"} to finish.`);
+}
+
+function updateCamera() {
+  const targetCameraX = player.x - canvas.width * 0.35;
+  cameraX = clamp(targetCameraX, 0, worldWidth - canvas.width);
+}
+
+function update(delta) {
+  handleHorizontalMovement(delta);
+  applyJump();
+
+  player.x += player.vx * delta;
+  resolveHorizontalCollisions();
+
+  player.vy = clamp(player.vy + gravity * delta, -100, maxFallSpeed);
+  const previousY = player.y;
+  player.y += player.vy * delta;
+  resolveVerticalCollisions(previousY);
+
+  player.x = clamp(player.x, 0, worldWidth - player.width);
+
+  if (player.y > worldHeight + 140) {
+    endGame("You fell off. Press Restart or R.");
+    return;
+  }
+
+  collectCoins();
+  checkGoal();
+  updateCamera();
+}
+
+function drawBackground() {
+  const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  skyGradient.addColorStop(0, "#1f2f4d");
+  skyGradient.addColorStop(1, "#0e172a");
+  ctx.fillStyle = skyGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const nearOffset = (cameraX * 0.22) % 240;
+  ctx.fillStyle = "#18243b";
+  for (let i = -1; i < 6; i += 1) {
+    const baseX = i * 240 - nearOffset;
+    ctx.beginPath();
+    ctx.moveTo(baseX, canvas.height);
+    ctx.lineTo(baseX + 120, 160);
+    ctx.lineTo(baseX + 240, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  const farOffset = (cameraX * 0.11) % 300;
+  ctx.fillStyle = "#223152";
+  for (let i = -1; i < 5; i += 1) {
+    const baseX = i * 300 - farOffset;
+    ctx.beginPath();
+    ctx.moveTo(baseX, canvas.height);
+    ctx.lineTo(baseX + 150, 210);
+    ctx.lineTo(baseX + 300, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawWorld() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+
+  for (const platform of platforms) {
+    const isGround = platform.y >= 320;
+    ctx.fillStyle = isGround ? "#334155" : "#3f4f6f";
+    ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+    ctx.fillStyle = "#8da5cb";
+    ctx.fillRect(platform.x, platform.y, platform.width, 4);
+  }
+
+  ctx.fillStyle = "#dbe4ff";
+  ctx.fillRect(goal.x + 8, goal.y, 4, goal.height);
+  ctx.fillStyle = allCoinsCollected() ? "#22c55e" : "#f97316";
+  ctx.fillRect(goal.x + 12, goal.y + 8, 26, 14);
+
+  for (const coin of coins) {
+    if (coin.collected) {
+      continue;
+    }
+
+    ctx.fillStyle = "#fbbf24";
+    ctx.beginPath();
+    ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#22d3ee";
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+  ctx.fillStyle = "#a5f3fc";
+  ctx.fillRect(player.x + 4, player.y + 4, player.width - 8, player.height - 8);
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(player.x + 15, player.y + 10, 3, 3);
+
+  ctx.restore();
+}
+
+function drawHud() {
+  ctx.fillStyle = "#eff6ff";
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.fillText(`Coins: ${score}/${coins.length}`, 12, 22);
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+  drawWorld();
+  drawHud();
+}
+
+function gameLoop(timestamp) {
+  if (!isRunning) {
+    return;
+  }
+
+  const deltaMs = timestamp - lastTimestamp;
+  const delta = clamp(deltaMs / (1000 / 60), 0.5, 2.2);
+  lastTimestamp = timestamp;
+
+  update(delta);
+  render();
+
+  if (isRunning) {
+    animationFrameId = requestAnimationFrame(gameLoop);
   }
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.code === "Space") {
+  const key = event.key.toLowerCase();
+
+  if (event.key.startsWith("Arrow") || key === " " || event.code === "Space") {
     event.preventDefault();
+  }
+
+  if (event.key === "Enter") {
     if (isRunning) {
       pauseGame();
     } else {
@@ -261,16 +478,40 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (event.key.toLowerCase() === "r") {
+  if (key === "r") {
     restartGame();
     return;
   }
 
-  if (event.key.startsWith("Arrow")) {
-    event.preventDefault();
+  if (leftInputs.has(key)) {
+    keys.left = true;
   }
 
-  queueDirectionFromKey(event.key);
+  if (rightInputs.has(key)) {
+    keys.right = true;
+  }
+
+  if (jumpInputs.has(key) || event.code === "Space") {
+    jumpQueued = true;
+  }
+});
+
+window.addEventListener("keyup", (event) => {
+  const key = event.key.toLowerCase();
+
+  if (leftInputs.has(key)) {
+    keys.left = false;
+  }
+
+  if (rightInputs.has(key)) {
+    keys.right = false;
+  }
+});
+
+window.addEventListener("blur", () => {
+  if (isRunning) {
+    pauseGame();
+  }
 });
 
 startPauseButton.addEventListener("click", () => {
@@ -285,5 +526,5 @@ restartButton.addEventListener("click", () => {
   restartGame();
 });
 
-highScoreElement.textContent = String(highScore);
+updateScoreboard();
 restartGame();
