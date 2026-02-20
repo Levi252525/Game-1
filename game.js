@@ -101,6 +101,7 @@ let highScore = readHighScore();
 let lives = maxLives;
 let health = maxHealth;
 let currentLevelIndex = 0;
+let lastUnlockedLevelIndex = 0;
 let cameraX = 0;
 let invulnerabilityTimer = 0;
 
@@ -314,7 +315,13 @@ function buildLevel(levelNumber) {
     addCoin(goalForLevel.x - 80, goalForLevel.y - 24);
   }
 
-  levelCheckpoints.push(makeCheckpoint(wallX - 56, startTop));
+  const firstCheckpointPlatform = levelPlatforms[2];
+  levelCheckpoints.push(
+    makeCheckpoint(
+      firstCheckpointPlatform.x + firstCheckpointPlatform.width - 28,
+      firstCheckpointPlatform.y
+    )
+  );
   const midClimb = climbPlatforms[Math.floor((climbPlatforms.length - 1) / 2)];
   if (midClimb) {
     levelCheckpoints.push(makeCheckpoint(midClimb.x + midClimb.width / 2 - 9, midClimb.y));
@@ -326,7 +333,7 @@ function buildLevel(levelNumber) {
   }
 
   if (difficulty >= 8) {
-    levelCheckpoints.push(makeCheckpoint(finalGround.x - 30, finalGround.y));
+    levelCheckpoints.push(makeCheckpoint(finalGround.x + 24, finalGround.y));
   }
 
   const enemyPlatforms = [
@@ -475,15 +482,19 @@ function loadLevel(index) {
   cameraX = clamp(player.x - canvas.width * 0.35, 0, Math.max(0, worldWidth - canvas.width));
 }
 
-function beginRun() {
+function beginRun(startLevelIndex = 0) {
+  const safeLevelIndex = clamp(startLevelIndex, 0, totalLevels - 1);
   score = 0;
   lives = maxLives;
   health = maxHealth;
   isGameOver = false;
   hasWon = false;
-  loadLevel(0);
+  lastUnlockedLevelIndex = safeLevelIndex;
+  loadLevel(safeLevelIndex);
   updateScoreboard();
-  setStatus(`Level 1/${totalLevels} (${levelTemplates[0].difficultyLabel})`);
+  setStatus(
+    `Level ${safeLevelIndex + 1}/${totalLevels} (${levelTemplates[safeLevelIndex].difficultyLabel})`
+  );
   render();
 }
 
@@ -492,8 +503,10 @@ function startGame() {
     return;
   }
 
-  if (isGameOver || hasWon) {
-    beginRun();
+  if (isGameOver) {
+    beginRun(lastUnlockedLevelIndex);
+  } else if (hasWon) {
+    beginRun(0);
   }
 
   isRunning = true;
@@ -518,8 +531,13 @@ function restartGame() {
   stopGameLoop();
   isRunning = false;
   startPauseButton.textContent = "Start";
-  beginRun();
-  setStatus("Game reset. Press Start or Enter.");
+  const restartLevelIndex = isGameOver ? lastUnlockedLevelIndex : 0;
+  beginRun(restartLevelIndex);
+  setStatus(
+    restartLevelIndex === 0
+      ? "Game reset. Press Start or Enter."
+      : `Restarted at Level ${restartLevelIndex + 1}. Press Start or Enter.`
+  );
 }
 
 function endGame(message) {
@@ -553,6 +571,7 @@ function loseLifeFromFall() {
   lives -= 1;
   if (lives <= 0) {
     health = 0;
+    lastUnlockedLevelIndex = currentLevelIndex;
     updateScoreboard();
     endGame("You fell and ran out of lives. Press R to restart.");
     return;
@@ -578,6 +597,7 @@ function damagePlayerFromEnemy(enemy) {
     lives -= 1;
     if (lives <= 0) {
       health = 0;
+      lastUnlockedLevelIndex = currentLevelIndex;
       updateScoreboard();
       endGame("Out of lives. Press R to restart.");
       return;
@@ -601,6 +621,7 @@ function advanceLevel() {
   }
 
   currentLevelIndex += 1;
+  lastUnlockedLevelIndex = Math.max(lastUnlockedLevelIndex, currentLevelIndex);
   health = maxHealth;
   loadLevel(currentLevelIndex);
   updateScoreboard();
