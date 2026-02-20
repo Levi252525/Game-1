@@ -2,6 +2,7 @@
 
 Replace these files to change the game's art:
 
+- `level-clear.gif` - played after each level clear
 - `background.png` - background image (also supports gif/jpg/webp/svg)
 - `player.svg` - player car sprite
 - `platform.svg` - platform texture
@@ -22,6 +23,7 @@ Current configuration in `game.js`:
 
 ```js
 const assetSources = {
+  levelClear: ["./assets/level-clear.gif", "...", "./assets/06c1f71f...gif"],
   background: ["./assets/background.png", "...", "./assets/Isopoly_01.gif"],
   player: ["./assets/player.png", "...", "./assets/player.svg"],
   platform: ["./assets/platform.png", "...", "./assets/platform.svg"],
