@@ -17,6 +17,7 @@ A browser platformer built with plain HTML, CSS, and JavaScript.
 - **Moving enemies** that damage health on contact.
 - **Checkpoints** that update your respawn location.
 - **Lives + health** system.
+- **Game-over retry from current level** instead of level 1.
 - **Double jump** for tighter platform sections.
 - **Persistent best score** saved in `localStorage`.
 
