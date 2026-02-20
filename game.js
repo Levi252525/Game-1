@@ -70,29 +70,35 @@ const rightInputs = new Set(["arrowright", "d"]);
 const jumpInputs = new Set(["arrowup", "w", " "]);
 
 const basePlatforms = [
-  { x: 0, y: 320, width: 280, height: 40 },
-  { x: 340, y: 296, width: 170, height: 64 },
-  { x: 560, y: 266, width: 160, height: 94 },
-  { x: 790, y: 312, width: 170, height: 48 },
-  { x: 1020, y: 284, width: 180, height: 76 },
-  { x: 1260, y: 250, width: 170, height: 110 },
-  { x: 1470, y: 302, width: 170, height: 58 },
+  { x: 0, y: 320, width: 300, height: 40 },
+  { x: 350, y: 300, width: 150, height: 60 },
+  { x: 550, y: 270, width: 120, height: 90 },
+  { x: 710, y: 238, width: 120, height: 122 },
+  // Two close walls you need to climb and clear.
+  { x: 860, y: 160, width: 36, height: 200 },
+  { x: 908, y: 160, width: 36, height: 200 },
+  // Upward jump section with higher platforms.
+  { x: 980, y: 210, width: 120, height: 150 },
+  { x: 1140, y: 180, width: 130, height: 180 },
+  { x: 1310, y: 150, width: 130, height: 210 },
+  { x: 1480, y: 210, width: 150, height: 150 },
   { x: 1700, y: 270, width: 170, height: 90 },
   { x: 1940, y: 320, width: 260, height: 40 },
 ];
 
 const baseCoins = [
   { x: 120, y: 284 },
-  { x: 240, y: 284 },
-  { x: 390, y: 260 },
-  { x: 470, y: 260 },
-  { x: 610, y: 230 },
-  { x: 680, y: 230 },
-  { x: 845, y: 276 },
-  { x: 1110, y: 248 },
-  { x: 1320, y: 214 },
-  { x: 1530, y: 266 },
-  { x: 1770, y: 234 },
+  { x: 250, y: 284 },
+  { x: 410, y: 264 },
+  { x: 600, y: 234 },
+  { x: 760, y: 202 },
+  { x: 878, y: 132 },
+  { x: 926, y: 132 },
+  { x: 1040, y: 182 },
+  { x: 1190, y: 152 },
+  { x: 1360, y: 122 },
+  { x: 1540, y: 182 },
+  { x: 1770, y: 242 },
   { x: 2030, y: 284 },
 ];
 
